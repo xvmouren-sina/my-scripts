@@ -1,0 +1,340 @@
+练习题
+
+################################################################
+
+写nginx启动脚本.要求:
+1).执行时接start启动nginx,如果启动失败给出原因;
+   原因可能有: a.已经在运行了; b.端口被占用了; c.配置错误 ...
+2).接stop关闭nginx服务;
+3).接restart重启服务,要求重启前先测试配置文件语法,如果有错不允许重启;
+4).接reload重载配置;
+5).将此服务交给chkconfig管理开机自启
+
+
+#!/bin/bash
+# sh_name : /root/nginx1.sh
+# chkconfig: 2345 64 36
+cd
+chmod +x nginx1.sh
+cp nginx1.sh  /etc/init.d/
+chkconfig --add nginx1.sh
+chkconfig nginx1.sh on
+
+[[ $# -ne 1 || "$1" == "-h" || "$1" == "--help" ]] &&
+echo "Usage: $(basename $0) start | stop | reload | restart" && exit
+
+flag=0
+ss -tlnp|grep -w 80 &> /dev/null && flag=1
+ss -tlnp|grep nginx &> /dev/null && flag=2
+config_status=0
+nginx -t &> /dev/null || config_status=1
+
+START() {
+    [ $flag -eq 1 ] && echo "The Port Occupied!" && exit
+    [ $config_status -eq 1 ] && echo "nginx.conf is error!" && exit
+    nginx && exit
+}
+
+if [ $flag -eq 2 ] ;then
+    case $1 in
+    "start")
+        echo "The nginx service is already running !" && exit
+        ;;
+    "stop")
+        nginx -s stop && exit
+        ;;
+    "reload")
+        nginx -s reload && exit
+    esac
+else
+    [ $1 == "start" ] && START && exit
+    [ $1 == "restart" ] || exit
+    [ $config_status -eq 1 ] && echo "nginx.conf is error!" && exit
+    nginx -s stop
+    START
+fi
+
+
+################################################################
+现有名单格式如下:
+# cat name.txt
+########讲 台###########
+张三 李四    王五   赵六
+钱大 孙二娘  周扒皮 
+
+写一个随机点名脚本,要求:
+1).每个人被点到名的机率都一样
+2).同一个人被点过一次后必须一个循环点完了才能被点到第二次
+-------------------------------------------------------------
+#!/bin/bash
+read -n1 -p "输入任意一个字符开始点名："    
+while :;do
+    name_all=`awk -F " |\t|\n" 'NR>1{printf $0}' /root/scripts/name.txt`   #sed '/#/d'
+    name=($name_all)
+    len=${#names[*]}
+    while :;do
+        index=$[RANDOM%$len]
+        [ -n "${name[$index]}" ] && echo "${name[$index]}" && unset name[$index] && read -n1 -p "输入任意一个字符开始点名："
+        [ -z "${name[*]}" ] && break
+    done
+done
+--------------------------------------------------------------------
+#!/bin/bash
+tmp_file=/tmp/.yidian.txt
+names=($(sed '/#/d' /root/name.txt))
+len=${#names[*]}
+while :;do
+    index=$[RANDOM%len]
+    grep "^${names[index]}$" $tmp_file &> /dev/null && continue
+    echo ${names[index]} |tee -a $tmp_file && break
+done
+num_yidian=$(cat $tmp_file|wc -l)
+[ $len -eq $num_yidian ] && rm -rf $tmp_file 
+
+###############################################################
+1.打印出100以内所有能被7整除的数
+ # seq 100 | awk '$1%7==0' 
+2.求100以内所有正整数之和
+ # seq 100 | awk '{sum+=$1}END{print sum}'
+
+3.写一个求和脚本sum.sh,可接一个或两个整数参数,功能如下(要求中的3,4,5条选做):
+  1).如果接一个参数,如./sum.sh 100,则计算1到100所有正整数的和;
+  2).如果接两个参数,如./sum.sh 50 100,则计算50到100所有正整数的和;
+  3).如果第一个参数为--help或-h,或不接任何参数,则输出帮助信息;
+  4).如果超过两个参数,提示"参数过多,请查看帮助信息",并退出;
+  5).当参数为其他非整数情况,提示"参数错误,请查看帮助信息",并退出.
+帮助信息示例:
+# ./sum.sh --help
+Usage: sum.sh [int1] int2
+Print the sum of that from int1 to int2, if no int1 there, print the sum of that from 1 to int2.
+
+求和示例:
+# ./sum.sh 100
+5050
+
+# ./sum.sh 99 100
+199
+/**********************************题3******************************************************************/
+#!/bin/bash
+#sum.sh
+if [ $# -eq 0 -o "$1" == "--help" -o "$1" == "-h" ] ;then
+    echo -e "Usage: $0 [int1] int2 \nPrint the sum of that from int1 to int2,if no int1 there, print the sum of that from 1 to int2."
+fi
+[ $# -gt 2 ] &&  echo "canshu too much,please look --help info" && exit
+for j in  "$@";do
+     
+elif [[ "$*" =~ ^[0-9]+$ ]];then
+        echo "$(seq $* | awk '{sum+=$1}END{print sum}') "   
+   
+
+
+/************************************************************************************************/
+
+
+
+====================以下选做=======================
+1.写一个类似于id命令的工具gid,用于查询组信息.功能如下:
+  1).如果不接任何参数,则显示出当前用户的主组信息;
+  2).如果接组名,则显示出所接的组信息;如果组不存在,则提示"no such group",并退出;
+  3).如果参数为--help或-h,提示帮助信息并退出;
+  3).写完后将此工具设置成系统命令.
+  4).正常执行显示信息格式如下(成员中带有p标识的是将此组作为主组的成员):
+    # gid IT
+    Group:IT
+    GroupID:1001
+    Members:tom(p),jim,jerry
+
+    # gid -h
+    Usage: gid [group]
+    Print the information for the specified group,or (when group omitted) for the current user's primary group.
+/**********************************题1******************************************************************/
+#!/bin/bash
+#gid.sh
+if [ $# -eq 0 ];then
+    echo "$USER"
+elif [ $# -eq 1 ];then
+    grep -w ^$1 /etc/group &> /dev/null ; gn=$?
+    gid=$( cat /etc/passwd | grep -w ^$1 | cut -d":" -f4)
+    pgid=$( cat /etc/group | grep -w ^$1 | cut -d":" -f3 )
+    members=$
+( cat /etc/group | grep -w ^$1 | cut -d":" -f4 )
+    if [ "$1" == "--help" -a "$1" == "-h" ] ;then
+    echo -e "Usage: $0 [group]\nPrint the information for the specified group,or (when group omitted) for the current user's primary group.";exit
+    elif  [ $gn -eq 0 ];then
+        echo Group:$1
+        echo GroupID:$pgid
+        if [ "$gid" == `echo $pgid` ];then
+            p=$( cat /etc/passwd | grep -w $1 | cut -d":" -f1)
+            echo -n "Members: $p" ; echo "(p),$members"
+        else
+            echo Members:$members
+         fi  
+    else
+        echo "no such group";exit
+    fi  
+fi
+# echo "alias gid.sh=/root/id.sh" >> /etc/bashrc
+
+/**********************************************************************************************************/
+
+2.写一个脚本register.sh,可实现用户注册(非系统用户)功能.
+注册流程:
+  1).提示用户输入用户名,检测该用户名是否已存在,如果已存在,则提示"用户XX已存在",并退出;
+  2).如果用户可注册,要求用户输入密码,重复输入密码.如果两次密码输入一致则提示"恭喜用户XX注册成功!",     否则提示"两次密码输入不一致!",并退出.
+要求:
+  1).所有的输入要检测是否为空,如果为空则直接提示"输入不能为空!",并退出;
+  2).密码的输入过程中不要显示出来;
+  3).将帐号及密码信息保存在文本文件中;
+  4).上面流程中所有的XX用真实的用户名替换掉;
+  5)[选做].写得较快的同学加上以下条件:
+    a.用户名只能由字母或数字组成,至少5个字符,且只能以字母开头;
+    b.密码不能低于8位.
+    c.所有密码使用md5加密后存放.
+      加密方法示例:如密码为123,通过 echo -n "123"|md5sum 命令可得到密文(长度为32字符)
+/*******************************************题2**************************************************************/
+#!/bin/bash
+#register.sh
+>>/register.txt
+read -p "Please enter user name: " name
+name_len=`echo $name|wc -c`
+if [ $name_len -eq 0 ];then
+    echo "The user name cannot be empty!";exit
+fi
+if ! [[ $name =~ ^[a-zA-Z][a-zA-Z0-9]+$ ]] && [ $name_len -ge 6 ];then
+    echo "Improper naming";exit
+fi
+grep -w ^$name /register.txt &> /dev/null; isname=$?
+if [ $isname -eq 0 ];then
+    echo "The user "$name" already exists";exit
+else
+    read -s -p "Please enter your password: " pwd1
+    pwd_len=`echo $pwd1|wc -c`
+    if [ $pwd_len -eq 0 ];then
+        echo "The password cannot be empty!";exit
+    fi  
+    if [ $pwd_len -ge 9 ];then
+        read -s -p "Please enter your password again: " pwd2
+        if [ "$pwd1" != `echo $pwd2` ];then
+            echo "Two different passwords";exit
+        else
+            echo  "$name:`echo -n $pwd1|md5sum`" >> /register.txt
+            echo "Congratulations "$name" on successful registration"
+        fi  
+    else
+        echo "The password cannot be less than 8 bits!"
+    fi  
+fi
+/**********************************************************************************************************/
+
+3.写一个登录脚本login.sh,实现已注册用户登录功能.
+登录流程:
+  1).提示用户输入用户名;
+  2).提示用户输入密码:如果用户名和密码都输入正确,则提示"XXX,欢迎回来!";如果用户名不存在或密码输入错误则提示"用户不存在或密码输入错误!",并退出.
+
+/**********************************************题3**********************************************/
+#!/bin/bash
+#login.sh
+read -p "Please enter your account name: " name
+read -s -p "Please enter your password: " pswd
+grep -w ^$name /register.txt &> /dev/null;isname=$?
+en_pswd=`echo -n $pswd|md5sum`
+grep -w ^$name /register.txt | grep -w $en_pswd &> /dev/null;ispswd=$?
+if [ $isname -eq 0 -a $ispswd -eq 0 ] ;then
+    echo -e "\n $name,Welcome back !"
+else
+    echo "User does not exist or password input error!";exit
+fi 
+/**********************************************************************************************/
+
+################################################################
+文件/data/host.txt文件内容如下:
+192.168.10.11	a40a71bb9cf4ea812c31
+192.168.10.12	f9b99ce7c8d5dd0eb4a5
+192.168.10.13	6285e04a32484fa03ab7
+...
+192.168.10.250	32e815fcd2e1027f978d
+第一列为服务器IP,第二列为root密码.
+请写一个脚本,批量传递公钥到所有在线的机器中.
+----------------------------------------------------------------------------------
+#!/bin/bash
+
+rsa_p=$HOME/.ssh/id_rsa.pub
+host_tab=/data/host.txt
+hosts=$(cat $host_tab | wc -l)
+which expect &> /dev/null || yum install -y expect &> /dev/null  ##可能会安装失败
+C_SSHKEY() {
+
+expect << eof
+spawn ssh-keygen
+expect ".ssh/id_rsa):"
+send "\n"
+expect " for no passphrase):"
+send "\n"
+expect "same passphrase again:"
+send "\n"
+expect eof
+eof
+}
+
+[ -f $rsa_p ] || C_SSHKEY &> /dev/null
+
+SEND_KEY() {
+for ((i=1;i<=$hosts;i++));do
+    host_IP=$(awk 'NR=='$i'{print $1}' $host_tab) &> /dev/null
+    ping -W3 -c2 $host_IP &> /dev/null || continue
+    host_PWD=$(awk -F " |\t" 'NR=='$i'{print $NF}' $host_tab) &> /dev/null
+    expect << eof
+        spawn ssh-copy-id -i $host_IP
+        expect {
+            "yes/no" { send "yes\n"; exp_continue }
+            "password:" { send "$host_PWD\n"}
+        }   
+        expect eof
+eof
+    #scp /root/ip.sh ${host_IP}:/root/
+    #ssh $host_IP "sh /root/ip.sh"
+done
+}
+SEND_KEY &> /dev/null &
+wait
+
+================================================
+附加:
+有两个文件如下:
+# cat a
+tom
+jim
+jerry
+...
+
+# cat b
+jim
+lucy
+lily
+...
+以下打印的内容中如有重复的只打印一次
+1).打印a文件中有而b文件中没有的内容
+ # awk 'NR==FNR{count[$0]=0}NR>FNR{count[$0]++}END{for(i in count)if(count[i]==0)print i}' a.txt b.txt
+
+2).打印出a,b文件中同时出现的内容(交集)
+    # awk 'NR==FNR{count[$0]=1}NR>FNR{if(count[$0])print}' a.txt b.txt |sort|uniq
+1. # awk 'NR==FNR{count[$0]++}NR>FNR{count[$0]++;b[$0]++}END{for(i in b)if(count[i]>b[i])print i}' a.txt b.txt
+2. # awk 'NR==FNR{a[$0]}NR>FNR{b[$0]}END{for(i in a){for(k in b)if(i==k)print i}}' a.txt b.txt
+
+3).打印出a,b文件中出现的所有内容(并集)
+ # awk '{count[$0]}END{for(i in count)print i}' a.txt b.txt
+
+4).打印出a,b文件中没有同时出现的内容(a中有而b中没有,b中有而a中没有)
+ # awk 'NR==FNR{a[$0]=$0;count[$0]}NR>FNR{b[$0]=$0;count[$0]}END{for(i in count)if(a[i]!=b[i])print i}' a.txt b.txt
+# awk '{buffer[$0]}NR==FNR{a[$0]=$0}NR>FNR{b[$0]=$0}END{for(i in buffer)if(a[i]!=b[i])print i}' a.txt b.txt
+
+
+NR==FNR{a[$0]=$0;count[$0]}
+NR>FNR{b[$0]=$0;count[$0]}
+END{
+for (i in count){
+    if(a[i]!=b[i]){
+        print i
+    }
+}
+}
